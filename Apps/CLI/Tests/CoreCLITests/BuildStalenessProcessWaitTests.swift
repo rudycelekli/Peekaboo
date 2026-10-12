@@ -6,6 +6,34 @@ import Testing
 @Suite(.tags(.safe), .serialized)
 struct BuildStalenessProcessWaitTests {
     @Test
+    func `Waiting preserves the existing termination observer`() throws {
+        let input = Pipe()
+        let process = ObserverGatedProcess {
+            try? input.fileHandleForWriting.write(contentsOf: Data("exit\n".utf8))
+        }
+        let observed = DispatchSemaphore(value: 0)
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "IFS= read -r signal; exit 7"]
+        process.standardInput = input
+        process.terminationHandler = { _ in observed.signal() }
+        defer {
+            try? input.fileHandleForWriting.close()
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+            process.waitUntilExit()
+        }
+
+        try process.run()
+        try waitForProcessExit(process, timeoutSeconds: 3)
+
+        #expect(!process.isRunning)
+        #expect(process.terminationStatus == 7)
+        #expect(observed.wait(timeout: .now() + 3) == .success)
+        #expect(observed.wait(timeout: .now()) == .timedOut)
+    }
+
+    @Test
     func `normally exiting child keeps its exit status`() throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -77,5 +105,32 @@ struct BuildStalenessProcessWaitTests {
         errno = 0
         #expect(kill(pid, 0) == -1)
         #expect(errno == ESRCH)
+    }
+}
+
+/// Release the real child only after the wait helper installs its handler.
+/// This prevents an early exit from making the overwritten-observer regression pass.
+private final class ObserverGatedProcess: Process, @unchecked Sendable {
+    private let lock = NSLock()
+    private var handlerAssignments = 0
+    private let releaseChild: @Sendable () -> Void
+
+    init(releaseChild: @escaping @Sendable () -> Void) {
+        self.releaseChild = releaseChild
+        super.init()
+    }
+
+    override var terminationHandler: (@Sendable (Process) -> Void)? {
+        get { super.terminationHandler }
+        set {
+            super.terminationHandler = newValue
+            self.lock.lock()
+            self.handlerAssignments += 1
+            let shouldRelease = self.handlerAssignments == 2
+            self.lock.unlock()
+            if shouldRelease {
+                self.releaseChild()
+            }
+        }
     }
 }
