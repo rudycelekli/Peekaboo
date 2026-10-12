@@ -1,0 +1,53 @@
+name: Public SDK source consumer proof
+on:
+  push:
+    branches: [validation/peekaboo-native-review-20261012]
+    paths: [.github/workflows/validate-sdk-review.yml, .github/validation/sdk-review20261012/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: peekaboo-sdk-review-20261012
+  cancel-in-progress: false
+jobs:
+  sdk:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - number: 1027
+            head: f0a97b20e2a9f91cb4630f75c4ce412ab2aecd9a
+            client: window1027.swift
+            marker: PUBLIC_SDK_TRACE_PASS
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: validation
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: rudycelekli/Peekaboo
+          ref: ${{ matrix.head }}
+          path: source
+          persist-credentials: false
+      - name: Real public SDK consumer and native Foundation tests
+        working-directory: source
+        env:
+          SOURCE_HEAD: ${{ matrix.head }}
+          PR_NUMBER: ${{ matrix.number }}
+          CLIENT_FILE: ${{ matrix.client }}
+          PASS_MARKER: ${{ matrix.marker }}
+          PROOF_ASSETS: ${{ github.workspace }}/validation/.github/validation/sdk-review20261012
+          PROOF_OUTPUT: ${{ runner.temp }}/sdk-proof
+        run: python3 "$PROOF_ASSETS/sdk-proof.py"
+      - name: Preserve public API traces and source/runtime receipts
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: peekaboo-sdk-${{ matrix.number }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-proof
+          retention-days: 14
+          if-no-files-found: warn
