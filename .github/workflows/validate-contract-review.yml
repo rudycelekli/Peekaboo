@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: rudycelekli/Peekaboo
-          ref: 465e4366a49ab32c25ac12a80db2eff1d703b869
+          ref: 5e713d00e2afbbd5f702b04ec267a498358d7164
           path: source
           submodules: recursive
           fetch-depth: 1
@@ -56,7 +56,7 @@ jobs:
       - name: Exact source lint, format and complete safe suite
         working-directory: source
         env:
-          SOURCE_HEAD: 465e4366a49ab32c25ac12a80db2eff1d703b869
+          SOURCE_HEAD: 5e713d00e2afbbd5f702b04ec267a498358d7164
           PROOF_OUTPUT: ${{ runner.temp }}/contract-proof
         run: python3 "$GITHUB_WORKSPACE/validation/.github/validation/contract-review20261012/proof.py"
       - name: Preserve canonical logs and exact source receipts
