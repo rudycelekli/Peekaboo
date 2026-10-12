@@ -14,7 +14,7 @@ actor RecoveryEffects {
     func hasEntered() -> Bool { self.entered }
     func finish() { self.continuation?.resume(); self.continuation = nil }
 }
-struct OwnedRecovery: RecoverableError {
+struct OwnedRecovery: PeekabooFoundation.RecoverableError {
     let effects: RecoveryEffects
     let category: ErrorCategory = .network
     let errorCode = "owned_retry"

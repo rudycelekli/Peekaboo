@@ -13,7 +13,7 @@ actor Gate {
     func hasEntered() -> Bool { self.entered }
     func finish() { self.continuation?.resume(); self.continuation = nil }
 }
-struct OwnedRecovery: RecoverableError {
+struct OwnedRecovery: PeekabooFoundation.RecoverableError {
     let effects: RecoveryEffects
     let isRecoverable: Bool
     let category: ErrorCategory = .network
