@@ -60,12 +60,14 @@ jobs:
             fi
           done
           command -v rg >/dev/null || brew install ripgrep
+          command -v uv >/dev/null || brew install uv
           command -v swiftlint >/dev/null || brew install swiftlint
           command -v swiftformat >/dev/null || brew install swiftformat
           xcodebuild -version
           swift --version
           swiftlint version
           swiftformat --version
+          uv --version
       - name: Canonical required gates and actual native consumer traces
         working-directory: source
         shell: bash

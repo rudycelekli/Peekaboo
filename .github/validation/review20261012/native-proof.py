@@ -73,7 +73,7 @@ fail=[name for name in required if results.get(name,{}).get('exit')!=0]
 if number==1020 and results.get('original-swift-mcp-consumer',{}).get('expected_regression')!='confirmed duplicate actual Swift child':fail.append('original-swift-mcp-consumer baseline')
 if number==1027 and results.get('original-adapter-with-new-native-regressions',{}).get('expected_regression')!='confirmed':fail.append('adapter baseline')
 batch=[]
-if number==1020:
+if number==1020 and not fail:
  plans=json.loads((assets/'batch-heads.json').read_text())
  try:
   for item in plans:
