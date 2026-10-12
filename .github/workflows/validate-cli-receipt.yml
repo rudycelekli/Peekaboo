@@ -1,0 +1,29 @@
+name: Correct frozen native CLI receipt counting
+on:
+  push:
+    branches: [validation/peekaboo-native-review-20261012]
+    paths: [.github/workflows/validate-cli-receipt.yml, .github/validation/cli-receipt20261012/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify unchanged native evidence and test the corrected evaluator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOF_OUTPUT: ${{ runner.temp }}/corrected-proof
+        run: python3 .github/validation/cli-receipt20261012/receipt.py
+      - name: Preserve original failed receipt and corrected separate receipt
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: peekaboo-cli-receipt-1043-${{ github.run_id }}
+          path: ${{ runner.temp }}/corrected-proof
+          retention-days: 14
