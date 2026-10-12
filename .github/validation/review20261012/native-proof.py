@@ -72,5 +72,28 @@ required=['install','lint','format-check','cli-build','test-safe']+(['actual-swi
 fail=[name for name in required if results.get(name,{}).get('exit')!=0]
 if number==1020 and results.get('original-swift-mcp-consumer',{}).get('expected_regression')!='confirmed duplicate actual Swift child':fail.append('original-swift-mcp-consumer baseline')
 if number==1027 and results.get('original-adapter-with-new-native-regressions',{}).get('expected_regression')!='confirmed':fail.append('adapter baseline')
-(out/'complete.json').write_text(json.dumps({'number':number,'head':head,'required_gates':required,'failed_gates':fail,'source_unchanged':True,'promotion_or_release':False},indent=2)+'\n')
+batch=[]
+if number==1020:
+ plans=json.loads((assets/'batch-heads.json').read_text())
+ try:
+  for item in plans:
+   n=item['number'];candidate=item['head'];subprocess.run(['git','fetch','--no-tags','--depth=1','origin',candidate],check=True)
+   for path in ['Core','Apps/CLI','.gitmodules','pnpm-lock.yaml','AXorcist','Commander','Swiftdansi','Tachikoma','TauTUI']:
+    assert subprocess.check_output(['git','rev-parse',head+':'+path])==subprocess.check_output(['git','rev-parse',candidate+':'+path]),(n,path)
+   subprocess.run(['git','checkout','--detach',candidate],check=True)
+   receipt=[]
+   for path in subprocess.check_output(['git','ls-files'],text=True).splitlines():
+    file=source/path
+    if file.is_file():receipt.append({'path':path,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
+   (out/('pr'+str(n)+'-source-manifest.json')).write_text(json.dumps({'head':candidate,'files':receipt},indent=2)+'\n')
+   names=[]
+   for label,command in [('lint',['pnpm','run','lint']),('format-check',['pnpm','run','format:check']),('test-safe',['pnpm','run','test:safe'])]:
+    name='pr'+str(n)+'-'+label;run(name,command,timeout=2700);names.append(name)
+   status=subprocess.check_output(['git','status','--porcelain','--untracked-files=no'],text=True);assert not status,(n,status)
+   for entry in receipt:
+    file=source/entry['path'];assert file.is_file() and hashlib.sha256(file.read_bytes()).hexdigest()==entry['sha256'],(n,entry['path'])
+   failed=[name for name in names if results[name]['exit']!=0];batch.append({'number':n,'head':candidate,'required_gates':names,'failed_gates':failed,'source_unchanged':True,'native_tree_and_locked_dependencies_identical_to':head})
+   (out/'batch-complete.json').write_text(json.dumps(batch,indent=2)+'\n');fail.extend(failed)
+ finally:subprocess.run(['git','checkout','--detach',head],check=True)
+(out/'complete.json').write_text(json.dumps({'number':number,'head':head,'required_gates':required,'failed_gates':fail,'batch_heads':batch,'source_unchanged':True,'promotion_or_release':False},indent=2)+'\n')
 raise SystemExit(bool(fail))
