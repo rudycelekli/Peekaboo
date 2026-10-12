@@ -1,4 +1,4 @@
-import hashlib,io,json,os,re,shutil,subprocess,tarfile,time
+import hashlib,http.server,io,json,os,re,shutil,subprocess,tarfile,threading,time
 from pathlib import Path
 source=Path.cwd();assets=Path(os.environ['PROOF_ASSETS']);out=Path(os.environ['PROOF_OUTPUT']);out.mkdir(parents=True,exist_ok=True);head=os.environ['SOURCE_HEAD'];number=int(os.environ['PR_NUMBER']);clientfile=os.environ['CLIENT_FILE'];marker=os.environ['PASS_MARKER'];results={}
 assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==head
@@ -8,9 +8,9 @@ for name in subprocess.check_output(['git','ls-files','Core/PeekabooFoundation']
  file=source/name
  if file.is_file():manifest.append({'path':name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
 (out/'source-manifest.json').write_text(json.dumps({'head':head,'files':manifest},indent=2)+'\n')
-def run(name,args,cwd=None):
+def run(name,args,cwd=None,env=None):
  start=time.monotonic()
- try:p=subprocess.run(args,cwd=cwd or source,text=True,capture_output=True,timeout=900);code=p.returncode;text=p.stdout+p.stderr
+ try:p=subprocess.run(args,cwd=cwd or source,env=env,text=True,capture_output=True,timeout=900);code=p.returncode;text=p.stdout+p.stderr
  except subprocess.TimeoutExpired as e:code=124;text=(e.stdout or b'').decode()+(e.stderr or b'').decode()
  (out/(name+'.log')).write_text(text);results[name]={'exit':code,'elapsed_seconds':round(time.monotonic()-start,2),'command':args};(out/'results.json').write_text(json.dumps(results,indent=2)+'\n');print(name,'exit',code,flush=True);print(text[-2500:],flush=True);return code,text
 client=out/'client';(client/'Sources/Client').mkdir(parents=True,exist_ok=True)
@@ -19,7 +19,27 @@ filename='main.swift' if number==1027 else 'Proof.swift';shutil.copyfile(assets/
 clientsha=hashlib.sha256((client/'Sources/Client'/filename).read_bytes()).hexdigest()
 def dependency(path):
  (client/'Package.swift').write_text('// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name:"OwnedReviewSDKClient",platforms:[.macOS(.v14)],dependencies:[.package(path:'+json.dumps(str(path))+')],targets:[.executableTarget(name:"Client",dependencies:[.product(name:"PeekabooFoundation",package:"PeekabooFoundation")])])\n')
-dependency(source/'Core/PeekabooFoundation');code,text=run('fresh-public-sdk-consumer',['swift','run','--package-path',str(client),'--jobs','2','Client']);freshpass=code==0 and marker in text
+def consumer(name):
+ args=['swift','run','--package-path',str(client),'--jobs','2','Client']
+ if number!=1042:return run(name,args)
+ # A real request must reach our owned loopback server before URLSession is cancelled.
+ started=out/'owned-request-started';started.unlink(missing_ok=True)
+ class Handler(http.server.BaseHTTPRequestHandler):
+  def log_message(self,*args):pass
+  def do_GET(self):
+   started.write_text('actual owned request observed\n');time.sleep(10)
+   try:
+    self.send_response(200);self.end_headers();self.wfile.write(b'owned delayed response')
+   except (BrokenPipeError,ConnectionResetError):pass
+ server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
+ threading.Thread(target=server.serve_forever,daemon=True).start()
+ env={**os.environ,'OWNED_CANCEL_URL':'http://127.0.0.1:'+str(server.server_port)+'/owned-cancellation','OWNED_REQUEST_STARTED_FILE':str(started)}
+ try:
+  code,text=run(name,args,env=env)
+  observed=started.is_file();(out/'loopback-cancellation-receipt.json').write_text(json.dumps({'real_owned_http_request_observed':observed,'native_urlsession_cancel_marker':'CANCELLED_URLSESSION_REQUEST' in text,'native_swift_task_cancel_marker':'CANCELLED_SWIFT_TASK' in text,'url_logged':False},indent=2)+'\n')
+  return (code if observed else 99),text
+ finally:server.shutdown();server.server_close()
+dependency(source/'Core/PeekabooFoundation');code,text=consumer('fresh-public-sdk-consumer');freshpass=code==0 and marker in text
 code,text=run('native-foundation-suite',['swift','test','--package-path','Core/PeekabooFoundation','--jobs','2']);suitepass=code==0 and bool(re.search(r'(?:Test run with|Executed) [1-9][0-9]* tests?',text))
 upgrade=None
 if number==1027:

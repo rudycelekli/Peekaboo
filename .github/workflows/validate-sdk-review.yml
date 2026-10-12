@@ -16,9 +16,25 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - number: 1027
-            head: f0a97b20e2a9f91cb4630f75c4ce412ab2aecd9a
-            client: window1027.swift
+          - number: 1025
+            head: 14e7dc825c51ec8f9527e5aab6f82c7572e7420f
+            client: duration1025.swift
+            marker: PUBLIC_SDK_TRACE_PASS
+          - number: 1026
+            head: f80490eb86b5ce4c4ab6015a209d49b651df8007
+            client: operation1026.swift
+            marker: PUBLIC_SDK_TRACE_PASS
+          - number: 1040
+            head: 2c17e0112635c22faf4988a641899a6fa077e87d
+            client: recovery1040.swift
+            marker: PUBLIC_SDK_TRACE_PASS
+          - number: 1041
+            head: 5ca5022dbaae11aafb8151cfab455c662d7a59ec
+            client: recovery1041.swift
+            marker: PUBLIC_SDK_TRACE_PASS
+          - number: 1042
+            head: c2a5c059de2263540f02d26af5af1bfb0bf6b70f
+            client: cancellation1042.swift
             marker: PUBLIC_SDK_TRACE_PASS
     runs-on: macos-26
     timeout-minutes: 25
@@ -48,6 +64,8 @@ jobs:
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
           name: peekaboo-sdk-${{ matrix.number }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/sdk-proof
+          path: |
+            ${{ runner.temp }}/sdk-proof
+            !${{ runner.temp }}/sdk-proof/**/.build/**
           retention-days: 14
           if-no-files-found: warn
