@@ -1,0 +1,70 @@
+name: Unchanged1030 complete canonical gate retry
+on:
+  push:
+    branches: [validation/peekaboo-native-review-20261012]
+    paths: [.github/workflows/validate-owned-retry1030.yml, .github/validation/retry1030-canonical20261012/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: peekaboo-owned-retry1030-20261012
+  cancel-in-progress: false
+jobs:
+  canonical:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      PEEKABOO_BUILD_JOBS: '2'
+      PEEKABOO_INCLUDE_AUTOMATION_TESTS: 'false'
+      PEEKABOO_INCLUDE_AMBIENT_STATE_TESTS: 'false'
+      RUN_AUTOMATION_TESTS: 'false'
+      RUN_LOCAL_TESTS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: validation
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: rudycelekli/Peekaboo
+          ref: da39b14f78ad2c6f6c53969b33a00adbd38b8efd
+          path: source
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '26.9.0'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: source/package.json
+      - name: Select compatible Xcode and required tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for candidate in /Applications/Xcode_26.6.app /Applications/Xcode_26.5.app /Applications/Xcode_26.4.1.app /Applications/Xcode_26.3.app /Applications/Xcode_26.2.app /Applications/Xcode.app; do
+            if [[ -d "$candidate" ]]; then
+              sudo xcode-select -s "$candidate"
+              echo "DEVELOPER_DIR=${candidate}/Contents/Developer" >> "$GITHUB_ENV"
+              break
+            fi
+          done
+          command -v rg >/dev/null || brew install ripgrep
+          command -v uv >/dev/null || brew install uv
+          command -v swiftlint >/dev/null || brew install swiftlint
+          command -v swiftformat >/dev/null || brew install swiftformat
+      - name: Exact source lint, format and complete safe suite
+        working-directory: source
+        env:
+          SOURCE_GROUP: retry1030
+          PROOF_ASSETS: ${{ github.workspace }}/validation/.github/validation/retry1030-canonical20261012
+          PROOF_OUTPUT: ${{ runner.temp }}/contract-proof
+        run: python3 "$GITHUB_WORKSPACE/validation/.github/validation/retry1030-canonical20261012/proof.py"
+      - name: Preserve canonical logs and exact source receipts
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: peekaboo-owned-retry1030-${{ github.run_id }}
+          path: ${{ runner.temp }}/contract-proof
+          retention-days: 14
+          if-no-files-found: warn
