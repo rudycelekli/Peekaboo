@@ -1,0 +1,89 @@
+name: Remaining owned exact heads canonical safe validation
+on:
+  push:
+    branches: [validation/peekaboo-native-review-20261012]
+    paths: [.github/workflows/validate-owned-canonical.yml, .github/validation/owned-canonical20261012/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: peekaboo-owned-canonical-20261012
+  cancel-in-progress: false
+jobs:
+  canonical:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - group: group1
+            head: 343a7c4987be113ffec9610455f4d69703153168
+          - group: group2
+            head: ca9a5a7e7347d00e4002568edb7fcac2bcf0f231
+          - group: group3
+            head: ca7bb5d2832f3cb33453c7c3d9ad01614eca896d
+          - group: group4
+            head: da39b14f78ad2c6f6c53969b33a00adbd38b8efd
+          - group: group5
+            head: f7122e06378451194559b29739816790c2ca4344
+          - group: group6
+            head: 64d5be8ce08a9a808d3774df1cf38ccee3279bf4
+          - group: group7
+            head: acf4333df48df6cb67522370d08eeec6d6cd8fd2
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      PEEKABOO_BUILD_JOBS: '2'
+      PEEKABOO_INCLUDE_AUTOMATION_TESTS: 'false'
+      PEEKABOO_INCLUDE_AMBIENT_STATE_TESTS: 'false'
+      RUN_AUTOMATION_TESTS: 'false'
+      RUN_LOCAL_TESTS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: validation
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: rudycelekli/Peekaboo
+          ref: ${{ matrix.head }}
+          path: source
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '26.9.0'
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          package_json_file: source/package.json
+      - name: Select compatible Xcode and required tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for candidate in /Applications/Xcode_26.6.app /Applications/Xcode_26.5.app /Applications/Xcode_26.4.1.app /Applications/Xcode_26.3.app /Applications/Xcode_26.2.app /Applications/Xcode.app; do
+            if [[ -d "$candidate" ]]; then
+              sudo xcode-select -s "$candidate"
+              echo "DEVELOPER_DIR=${candidate}/Contents/Developer" >> "$GITHUB_ENV"
+              break
+            fi
+          done
+          command -v rg >/dev/null || brew install ripgrep
+          command -v uv >/dev/null || brew install uv
+          command -v swiftlint >/dev/null || brew install swiftlint
+          command -v swiftformat >/dev/null || brew install swiftformat
+      - name: Exact source lint, format and complete safe suite
+        working-directory: source
+        env:
+          SOURCE_GROUP: ${{ matrix.group }}
+          PROOF_ASSETS: ${{ github.workspace }}/validation/.github/validation/owned-canonical20261012
+          PROOF_OUTPUT: ${{ runner.temp }}/contract-proof
+        run: python3 "$GITHUB_WORKSPACE/validation/.github/validation/owned-canonical20261012/proof.py"
+      - name: Preserve canonical logs and exact source receipts
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: peekaboo-owned-canonical-${{ matrix.group }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/contract-proof
+          retention-days: 14
+          if-no-files-found: warn
