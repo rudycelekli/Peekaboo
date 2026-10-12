@@ -1,4 +1,4 @@
-name: Canonical CLI proof for two frozen review repairs
+name: Canonical CLI proof for frozen review repair
 on:
   push:
     branches: [validation/peekaboo-native-review-20261012]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: peekaboo-cli-review-20261012
+  group: peekaboo-cli-review-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   native:
@@ -16,11 +16,11 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - number: 1043
-            head: e7c99895e8a692b5e8147a5d2abf956ac9b18188
-            baseline: fa8556d81c341fbba8721b5c83d04312a2976458
-            filter: AgentOutputDelegateBoundaryRegressionTests
-            count: 14
+          - number: 1038
+            head: 2bbface0185d3dedf5e12e948c72f922eafee0de
+            baseline: 1b6888a4c43c97e728f67833cf6c334ea51a67b2
+            filter: BuildStalenessProcessWaitTests
+            count: 4
     runs-on: macos-26
     timeout-minutes: 65
     env:

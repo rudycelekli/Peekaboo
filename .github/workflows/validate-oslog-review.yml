@@ -1,0 +1,37 @@
+name: Actual historical unified-log review proof
+on:
+  push:
+    branches: [validation/peekaboo-native-review-20261012]
+    paths: [.github/workflows/validate-oslog-review.yml, .github/validation/oslog-review20261012/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unified-log:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: validation
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: rudycelekli/Peekaboo
+          ref: ca7bb5d2832f3cb33453c7c3d9ad01614eca896d
+          path: source
+          persist-credentials: false
+      - name: Real unified-log error visibility and info exclusion
+        working-directory: source
+        env:
+          SOURCE_HEAD: ca7bb5d2832f3cb33453c7c3d9ad01614eca896d
+          PROOF_OUTPUT: ${{ runner.temp }}/oslog-proof
+        run: python3 "$GITHUB_WORKSPACE/validation/.github/validation/oslog-review20261012/oslog-proof.py"
+      - name: Preserve actual OS-log trace and receipts
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: peekaboo-oslog-1033-${{ github.run_id }}
+          path: ${{ runner.temp }}/oslog-proof
+          retention-days: 14
+          if-no-files-found: warn
